@@ -43,6 +43,7 @@ def align_image_with_sift(template_path, target_path, output_path):
     print(f"Found {len(good_matches)} good matches.")
 
     # 5. Calculate Transformation Matrix if enough matches found
+    
     MIN_MATCH_COUNT = 4 # Affine needs at least 3, Homography needs 4
     if len(good_matches) > MIN_MATCH_COUNT:
         src_pts = np.float32([kp1[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
@@ -65,4 +66,8 @@ def align_image_with_sift(template_path, target_path, output_path):
 if __name__ == "__main__":
     os.makedirs("outputs", exist_ok=True)
     print("Testing SIFT Alignment...")
-    align_image_with_sift("data/bottle1.png", "data/bottle2.jpg", "outputs/aligned_bottle2.jpg")
+    align_image_with_sift(
+        "data/CTW1500_filtered/train_images/0292.jpg",
+        "data/CTW1500_filtered/train_images/0084.jpg",
+        "outputs/aligned_sample.jpg"
+    )

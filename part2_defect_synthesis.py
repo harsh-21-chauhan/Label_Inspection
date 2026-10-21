@@ -50,5 +50,6 @@ def synthesize_defects(image_path, output_dir):
     print(f"Successfully generated 3 defective variants in {output_dir}/")
 
 if __name__ == "__main__":
-    # Test on a base image (assuming bottle1.png is our 'positive' template)
-    synthesize_defects("data/bottle1.png", "outputs/synthesized_defects")
+    # Test on a base image from curated product dataset
+    sample_img = "data/CTW1500_filtered/train_images/0292.jpg"
+    synthesize_defects(sample_img, "outputs/synthesized_defects")

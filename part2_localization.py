@@ -51,4 +51,4 @@ def localize_text(image_path, output_path):
     return rois, gray
 
 if __name__ == "__main__":
-    localize_text("data/bottle1.png", "outputs/part2_localization.jpg")
+    localize_text("data/CTW1500_filtered/train_images/0292.jpg", "outputs/part2_localization.jpg")

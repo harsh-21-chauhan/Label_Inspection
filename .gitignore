@@ -1,0 +1,24 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+.DS_Store
+
+# Environments
+.env
+venv/
+env/
+
+# Large model weight checkpoints
+outputs/*.pth
+outputs/*.pt
+
+# Large generated augmentation caches (reproducible from pipeline scripts)
+outputs/ctw1500_augmented/train/
+outputs/ctw1500_augmented/test/
+outputs/totaltext_augmented/
+
+# Raw unfiltered datasets and zip downloads
+data/CTW1500/
+data/*.zip
+data/*.tar.gz
