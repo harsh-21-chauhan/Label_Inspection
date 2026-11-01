@@ -9,9 +9,10 @@ class DBNetBackbone(nn.Module):
     DBNet Backbone: Uses a lightweight ResNet-18 to extract multi-scale features.
     ResNet-18 is chosen over ResNet-50 because DBNet's entire purpose is SPEED.
     """
-    def __init__(self):
+    def __init__(self, pretrained=True):
         super().__init__()
-        resnet = models.resnet18(weights=None)
+        weights = models.ResNet18_Weights.DEFAULT if pretrained else None
+        resnet = models.resnet18(weights=weights)
 
         # We split ResNet into 4 stages to get feature maps at different scales.
         # Each stage halves the resolution and doubles the channels.
@@ -138,9 +139,9 @@ class DBNet(nn.Module):
         -> Threshold Map (adaptive per-pixel threshold)
         -> Binary Map (final crisp text mask via differentiable binarization)
     """
-    def __init__(self):
+    def __init__(self, pretrained=True):
         super().__init__()
-        self.backbone = DBNetBackbone()
+        self.backbone = DBNetBackbone(pretrained=pretrained)
         self.fpn = FeaturePyramidNetwork(
             in_channels_list=[64, 128, 256, 512],
             out_channels=256

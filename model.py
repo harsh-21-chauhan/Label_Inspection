@@ -2,23 +2,19 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 
-def get_shufflenet_model(num_classes=2):
+def get_shufflenet_model(num_classes=2, pretrained=True):
     """
     Returns the ShuffleNet V2 architecture as specified in the paper.
-    ShuffleNet uses Depthwise Separable Convolutions to remain extremely
-    fast and efficient for industrial real-time applications.
+    ShuffleNet uses Depthwise Separable Convolutions and Channel Shuffle
+    to remain extremely fast (< 5ms) and efficient for industrial real-time applications.
     """
-    # Load the industrial standard ShuffleNet V2
-    # We use pretrained=False here because we are building it from scratch,
-    # but in a real industrial scenario with 10k images, pretrained=True is better.
-    model = models.shufflenet_v2_x1_0(weights=None)
-    
-    # The default ShuffleNet outputs 1000 classes (for ImageNet).
-    # We only have 2 classes (Defect-Free vs Defective).
-    # So we replace the final Fully Connected (Linear) layer.
+    weights = models.ShuffleNet_V2_X1_0_Weights.DEFAULT if pretrained else None
+    model = models.shufflenet_v2_x1_0(weights=weights)
+
+    # Replace final linear classifier layer
     num_ftrs = model.fc.in_features
     model.fc = nn.Linear(num_ftrs, num_classes)
-    
+
     return model
 
 if __name__ == "__main__":

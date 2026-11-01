@@ -1,3 +1,5 @@
+import os
+import argparse
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -22,55 +24,54 @@ class DBNetLoss(nn.Module):
         self.l1 = nn.L1Loss(reduction='mean')
 
     def forward(self, prob_map, thresh_map, binary_map, gt_prob, gt_thresh, gt_thresh_mask):
-        # Loss 1: Probability map should match ground truth text regions
         loss_prob = self.bce(prob_map, gt_prob)
-
-        # Loss 2: Binary map (after differentiable binarization) should be crisp
         loss_binary = self.bce(binary_map, gt_prob)
 
-        # Loss 3: Threshold map accuracy (only where text exists)
         if gt_thresh_mask.sum() > 0:
             loss_thresh = self.l1(
                 thresh_map * gt_thresh_mask,
                 gt_thresh * gt_thresh_mask
             )
         else:
-            loss_thresh = torch.tensor(0.0)
+            loss_thresh = torch.tensor(0.0, device=prob_map.device)
 
         total = loss_prob + self.alpha * loss_binary + self.beta * loss_thresh
         return total, loss_prob.item(), loss_binary.item(), loss_thresh.item()
 
 
-def train_dbnet():
-    """
-    Phase 5: DBNet Training Script
-    Trains the lightweight DBNet on our full augmented CTW1500 dataset.
-    """
+def train_dbnet(epochs=10, batch_size=4, lr=0.001, save_path="outputs/dbnet_trained.pth"):
     print("=" * 60)
     print("Phase 5: DBNet (Fast Text Detection) Training")
     print("=" * 60)
 
-    # Dataset paths
-    ann_path = "data/CTW1500/annotations/train_ctw1500_maxlen100_v2.json"
-    img_dir = "data/CTW1500/ctwtrain_text_image"
-    aug_dir = "outputs/ctw1500_augmented/train"
+    # Device configuration (Auto-detects Apple Silicon MPS, CUDA GPU, or CPU)
+    if torch.backends.mps.is_available():
+        device = torch.device("mps")
+    elif torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
+    print(f"Hardware Accelerator: {device}")
 
-    # Load dataset (using target_size=640 for balanced speed/accuracy)
-    dataset = DBNetDataset(ann_path, img_dir, aug_dir, target_size=640)
-    print(f"Loaded {len(dataset)} training images")
+    # Dataset paths (Curated bottle & packaging dataset)
+    ann_path = "data/curated_dataset/annotations/train_bottles_curated.json"
+    img_dir = "data/curated_dataset/train_images"
 
-    # DataLoader with batch_size=2 (safe for CPU/limited GPU memory)
-    data_loader = DataLoader(dataset, batch_size=2, shuffle=True, num_workers=0)
+    os.makedirs("outputs", exist_ok=True)
 
-    # Initialize model, loss, and optimizer
-    model = DBNet()
-    criterion = DBNetLoss(alpha=1.0, beta=10.0)
+    # Load dataset (with dynamic on-the-fly industrial augmentations)
+    dataset = DBNetDataset(ann_path, img_dir, target_size=640)
+    print(f"Loaded {len(dataset)} training samples ({len(dataset.images)} curated bottles x 3 dynamic variants)")
 
-    # Adam optimizer (converges faster than SGD for this architecture)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    # DataLoader
+    data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0)
 
-    # Training config
-    num_epochs = 3
+    # Initialize model with ImageNet pretraining, loss, and optimizer
+    model = DBNet(pretrained=True).to(device)
+    criterion = DBNetLoss(alpha=1.0, beta=10.0).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-4)
+
+    num_epochs = epochs
     model.train()
 
     print(f"\nStarting Training ({num_epochs} epochs, {len(data_loader)} batches/epoch)...\n")
@@ -80,6 +81,11 @@ def train_dbnet():
         batch_count = 0
 
         for images, gt_prob, gt_thresh, gt_thresh_mask in data_loader:
+            images = images.to(device)
+            gt_prob = gt_prob.to(device)
+            gt_thresh = gt_thresh.to(device)
+            gt_thresh_mask = gt_thresh_mask.to(device)
+
             # Forward pass
             prob_map, thresh_map, binary_map = model(images)
 
@@ -102,20 +108,27 @@ def train_dbnet():
             running_loss += total_loss.item()
             batch_count += 1
 
-            if batch_count % 25 == 0:
+            if batch_count % 25 == 0 or batch_count == len(data_loader):
                 avg = running_loss / batch_count
                 print(f"  Epoch [{epoch+1}/{num_epochs}] Batch [{batch_count}/{len(data_loader)}] "
                       f"Loss: {avg:.4f} (Prob: {l_prob:.4f}, Binary: {l_binary:.4f}, Thresh: {l_thresh:.4f})")
 
-        epoch_loss = running_loss / batch_count
+        epoch_loss = running_loss / max(batch_count, 1)
         print(f"\n  >>> Epoch [{epoch+1}/{num_epochs}] Average Loss: {epoch_loss:.4f}\n")
 
     # Save the trained model
-    torch.save(model.state_dict(), "outputs/dbnet_trained.pth")
+    torch.save(model.state_dict(), save_path)
     print("=" * 60)
-    print(f"Training Complete! Model saved to outputs/dbnet_trained.pth")
+    print(f"Training Complete! Model saved to {save_path}")
     print("=" * 60)
 
 
 if __name__ == "__main__":
-    train_dbnet()
+    parser = argparse.ArgumentParser(description="Train DBNet on Curated Label Dataset")
+    parser.add_argument("--epochs", type=int, default=5, help="Number of training epochs (default: 5)")
+    parser.add_argument("--batch_size", type=int, default=4, help="Batch size (default: 4)")
+    parser.add_argument("--lr", type=float, default=0.001, help="Learning rate (default: 0.001)")
+    parser.add_argument("--save_path", type=str, default="outputs/dbnet_trained.pth", help="Checkpoint save path")
+    args = parser.parse_args()
+
+    train_dbnet(epochs=args.epochs, batch_size=args.batch_size, lr=args.lr, save_path=args.save_path)
